@@ -26,24 +26,22 @@ async function isDuplicate(jobId, email, linkedin_url, apiKey, account) {
 
 // ===== ROUTES =====
 
-// Root route
+// Root
 app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
-// Get all jobs (active + inactive)
+// Fetch all jobs (active + inactive)
 app.get("/jobs", async (req, res) => {
   try {
     const account = process.env.WORKABLE_ACCOUNT;
     const apiKey = process.env.WORKABLE_API_KEY;
 
-    // Fetch all jobs, no state filter
     const response = await axios.get(
       `https://${account}.workable.com/spi/v3/jobs`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
 
-    // Return all jobs
     res.json({ jobs: response.data.jobs || [] });
   } catch (err) {
     console.error(err.message);
@@ -51,7 +49,7 @@ app.get("/jobs", async (req, res) => {
   }
 });
 
-// Add candidate (POST only)
+// Add candidate (POST)
 app.post("/add-candidate", async (req, res) => {
   try {
     const { firstName, lastName, email, linkedin_url, tag, jobId } = req.body;
@@ -63,11 +61,10 @@ app.post("/add-candidate", async (req, res) => {
     const account = process.env.WORKABLE_ACCOUNT;
     const apiKey = process.env.WORKABLE_API_KEY;
 
-    // Duplicate detection
+    // Duplicate check
     const duplicate = await isDuplicate(jobId, email, linkedin_url, apiKey, account);
     if (duplicate) return res.status(400).json({ error: "Candidate already exists" });
 
-    // Add candidate
     const response = await axios.post(
       `https://${account}.workable.com/spi/v3/jobs/${jobId}/candidates`,
       {
