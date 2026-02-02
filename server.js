@@ -31,18 +31,19 @@ app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
-// Get active jobs only
+// Get all jobs (active + inactive)
 app.get("/jobs", async (req, res) => {
   try {
     const account = process.env.WORKABLE_ACCOUNT;
     const apiKey = process.env.WORKABLE_API_KEY;
 
+    // Fetch all jobs, no state filter
     const response = await axios.get(
-      `https://${account}.workable.com/spi/v3/jobs?state=open`,
+      `https://${account}.workable.com/spi/v3/jobs`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
 
-    // Return jobs array
+    // Return all jobs
     res.json({ jobs: response.data.jobs || [] });
   } catch (err) {
     console.error(err.message);
