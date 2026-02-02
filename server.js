@@ -15,19 +15,18 @@ app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
-// Get all jobs
+// Get all jobs (active + inactive)
 app.get("/jobs", async (req, res) => {
   try {
     const response = await axios.get(
-      `https://${account}.workable.com/spi/v3/jobs`,
+      `https://${account}.workable.com/spi/v3/jobs?state=open,closed,archived`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     );
 
-    // Return jobs array with id, title, state
     const jobs = response.data.jobs.map(job => ({
       id: job.id,
       title: job.title,
-      state: job.state
+      state: job.state // open / closed / archived
     }));
 
     res.json({ jobs });
@@ -62,7 +61,8 @@ app.post("/add-candidate", async (req, res) => {
     res.json({ success: true, data: response.data });
   } catch (err) {
     console.error(err.response?.data || err.message);
-    res.status(500).json({ error: err.response?.data || err.message });
+    // Send readable error to frontend
+    res.status(500).json({ error: err.response?.data || { message: err.message } });
   }
 });
 
