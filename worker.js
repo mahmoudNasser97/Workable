@@ -182,7 +182,7 @@ async function addCandidate(env, body) {
   const job = jobShortcode || jobId;
 
   if (!job) throw new Error("Missing jobShortcode/jobId");
-  if (!email) throw new Error("Missing email");
+  if (!email && !linkedin_url) throw new Error("Missing email or linkedin_url");
 
   const payload = {
     candidate: {
