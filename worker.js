@@ -1,8 +1,5 @@
 export default {
   async fetch(request, env) {
-    // ======================
-    // CORS preflight
-    // ======================
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders() });
     }
@@ -25,7 +22,7 @@ export default {
       }
 
       // ======================
-      // DEBUG – TEST AUTH
+      // DEBUG – AUTH TEST
       // ======================
       if (path === "/debug/auth") {
         const res = await fetch(
@@ -37,21 +34,22 @@ export default {
           }
         );
 
-        const text = await res.text();
-
         return json({
           status: res.status,
           ok: res.ok,
-          response: safeJson(text)
+          response: safeJson(await res.text())
         });
       }
 
       // ======================
-      // GET /jobs
+      // GET /jobs (PAGINATED)
       // ======================
       if (path === "/jobs" && request.method === "GET") {
         const state = url.searchParams.get("state") || "open";
-        const result = await fetchAllJobs(env, state);
+        const page = Number(url.searchParams.get("page") || 1);
+        const limit = Number(url.searchParams.get("limit") || 50);
+
+        const result = await fetchJobsPage(env, state, page, limit);
         return json(result);
       }
 
@@ -98,64 +96,45 @@ function json(data, status = 200) {
 }
 
 function safeJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
+  try { return JSON.parse(text); }
+  catch { return text; }
 }
 
 /* =========================
-   Workable API – JOBS
+   Workable – JOBS (SAFE)
 ========================= */
 
-async function fetchAllJobs(env, state) {
-  let page = 1;
-  let jobs = [];
-  let hasMore = true;
+async function fetchJobsPage(env, state, page, limit) {
+  let apiUrl =
+    `https://${env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3/jobs` +
+    `?limit=${limit}&page=${page}`;
 
-  while (hasMore) {
-    let apiUrl = `https://${env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3/jobs?limit=50&page=${page}`;
-    if (state !== "all") apiUrl += `&state=${state}`;
+  if (state !== "all") apiUrl += `&state=${state}`;
 
-    const res = await fetch(apiUrl, {
-      headers: {
-        Authorization: `Bearer ${env.WORKABLE_TOKEN}`
-      }
-    });
+  const res = await fetch(apiUrl, {
+    headers: { Authorization: `Bearer ${env.WORKABLE_TOKEN}` }
+  });
 
-    const text = await res.text();
-    const data = safeJson(text);
+  const data = safeJson(await res.text());
 
-    if (!res.ok) {
-      throw new Error(JSON.stringify(data));
-    }
-
-    jobs.push(...(data.jobs || []));
-    hasMore = data.paging?.next !== null;
-    page++;
+  if (!res.ok) {
+    throw new Error(JSON.stringify(data));
   }
 
   return {
-    total: jobs.length,
-    state,
-    jobs
+    page,
+    limit,
+    hasMore: data.paging?.next !== null,
+    jobs: data.jobs || []
   };
 }
 
 /* =========================
-   Workable API – ADD CANDIDATE
+   Workable – ADD CANDIDATE
 ========================= */
 
 async function addCandidate(env, body) {
-  const {
-    firstName,
-    lastName,
-    email,
-    linkedin_url,
-    tag,
-    jobId
-  } = body;
+  const { firstName, lastName, email, linkedin_url, tag, jobId } = body;
 
   if (!jobId) throw new Error("Missing jobId");
   if (!email) throw new Error("Missing email");
@@ -180,8 +159,7 @@ async function addCandidate(env, body) {
     }
   );
 
-  const text = await res.text();
-  const data = safeJson(text);
+  const data = safeJson(await res.text());
 
   if (!res.ok) {
     throw new Error(JSON.stringify(data));
