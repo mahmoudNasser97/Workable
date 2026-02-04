@@ -98,4 +98,10 @@ async function fetchAllJobs(env, state) {
     state,
     jobs
   };
+  if (path === "/debug") {
+  return json({
+    tokenExists: !!env.WORKABLE_TOKEN,
+    tokenLength: env.WORKABLE_TOKEN?.length,
+    subdomain: env.WORKABLE_SUBDOMAIN
+  });
 }
