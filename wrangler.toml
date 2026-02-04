@@ -9,3 +9,4 @@ workers_dev = true
 # ----------------------
 [vars]
 WORKABLE_SUBDOMAIN = "pearltalent"
+WORKABLE_TOKEN = "Z-lfjzlfjBAjYWVtgSdI55D3Mtv7Oh3c_7AnPHZOidw"
