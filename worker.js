@@ -52,8 +52,6 @@ export default {
 
         // cursor-based paging:
         // - your extension sends page=1,2.. but workable uses cursor
-        // We'll translate: page=1 => first page
-        // page>1 => walk next links internally (safe for small pages)
         const page = Math.max(1, Number(url.searchParams.get("page") || 1));
 
         const result = await fetchJobsPageCursor(env, state, page, limit);
@@ -88,7 +86,7 @@ function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
   };
 }
 
@@ -113,13 +111,10 @@ function safeJson(text) {
 ========================= */
 
 async function fetchJobsPageCursor(env, state, page, limit) {
-  // Build first URL
   const base =
     `https://${env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3/jobs?limit=${limit}` +
     (state && state !== "all" ? `&state=${encodeURIComponent(state)}` : "");
 
-  // Workable uses paging.next URL as cursor.
-  // If caller asks for page>1, we "advance" by following paging.next N-1 times.
   let apiUrl = base;
   let data = null;
 
@@ -138,7 +133,6 @@ async function fetchJobsPageCursor(env, state, page, limit) {
     if (i < page) {
       const next = data?.paging?.next;
       if (!next) {
-        // no more pages
         return {
           page,
           limit,
@@ -156,19 +150,16 @@ async function fetchJobsPageCursor(env, state, page, limit) {
     page,
     limit,
     hasMore: !!nextUrl,
-    next: nextUrl, // optional: helpful if you later switch extension to cursor paging
+    next: nextUrl,
     jobs: data?.jobs || []
   };
 }
 
 /* =========================
-   Workable – ADD CANDIDATE
+   Workable – ADD CANDIDATE (EMAIL OPTIONAL)
 ========================= */
 
 async function addCandidate(env, body) {
-  // Accept both for backward compatibility:
-  // - new: jobShortcode
-  // - old: jobId
   const {
     firstName,
     lastName,
@@ -180,27 +171,33 @@ async function addCandidate(env, body) {
   } = body;
 
   const job = jobShortcode || jobId;
-
   if (!job) throw new Error("Missing jobShortcode/jobId");
-  if (!email && !linkedin_url) throw new Error("Missing email or linkedin_url");
 
-  const payload = {
-    candidate: {
-      firstname: (firstName || "").trim(),
-      lastname: (lastName || "").trim(),
-      email: email.trim(),
-      // Keep linkedin_url if your Workable accepts it.
-      // Many accounts prefer social_profiles instead; we provide both safely.
-      linkedin_url: linkedin_url ? linkedin_url.trim() : undefined,
-      social_profiles: linkedin_url
-        ? [{ type: "linkedin", url: linkedin_url.trim() }]
-        : undefined,
-      tags: tag ? [tag] : []
-    }
+  // ✅ Safe strings (avoid .trim() crash)
+  const safeEmail = typeof email === "string" ? email.trim() : "";
+  const safeLinkedIn = typeof linkedin_url === "string" ? linkedin_url.trim() : "";
+
+  // ✅ Require at least one identifier
+  if (!safeEmail && !safeLinkedIn) {
+    throw new Error("Missing email or linkedin_url (provide at least one)");
+  }
+
+  const candidate = {
+    firstname: typeof firstName === "string" ? firstName.trim() : "",
+    lastname: typeof lastName === "string" ? lastName.trim() : "",
+    tags: tag ? [tag] : []
   };
 
-  // Remove undefined fields to keep payload clean
-  cleanupUndefined(payload.candidate);
+  // ✅ Only include email if present
+  if (safeEmail) candidate.email = safeEmail;
+
+  // ✅ LinkedIn info (preferred way: social_profiles)
+  if (safeLinkedIn) {
+    candidate.social_profiles = [{ type: "linkedin", url: safeLinkedIn }];
+    candidate.linkedin_url = safeLinkedIn; // optional fallback
+  }
+
+  const payload = { candidate };
 
   const res = await fetch(
     `https://${env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3/jobs/${encodeURIComponent(job)}/candidates`,
@@ -221,14 +218,4 @@ async function addCandidate(env, body) {
   }
 
   return data;
-}
-
-function cleanupUndefined(obj) {
-  for (const k of Object.keys(obj)) {
-    if (obj[k] === undefined || obj[k] === null || obj[k] === "") {
-      // keep empty firstname/lastname? (Workable tolerates, but we can remove empties too)
-      if (k === "firstname" || k === "lastname") continue;
-      delete obj[k];
-    }
-  }
 }
